@@ -14,7 +14,6 @@ autom4te.cache
 build-aux
 libtool
 folly/test/gtest
-folly/folly-config.h
 folly/**/test/*_benchmark
 folly/**/test/*.log
 folly/**/test/*_test

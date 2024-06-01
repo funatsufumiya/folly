@@ -25,7 +25,7 @@
 
 #include <fmt/core.h>
 
-#include <glog/logging.h>
+// #include <glog/logging.h>
 #include <folly/Conv.h>
 #include <folly/Exception.h>
 #include <folly/Indestructible.h>
@@ -583,8 +583,7 @@ thread_local CoreAllocatorGuard* gCoreAllocatorGuard = nullptr;
 
 CoreAllocatorGuard::CoreAllocatorGuard(size_t numStripes, size_t stripe)
     : numStripes_(numStripes), stripe_(stripe) {
-  CHECK(gCoreAllocatorGuard == nullptr)
-      << "CoreAllocator::Guard cannot be used recursively";
+  assert(gCoreAllocatorGuard == nullptr);
   gCoreAllocatorGuard = this;
 }
 
@@ -595,8 +594,7 @@ CoreAllocatorGuard::~CoreAllocatorGuard() {
 namespace detail {
 
 void* coreMallocFromGuard(size_t size) {
-  CHECK(gCoreAllocatorGuard != nullptr)
-      << "CoreAllocator::allocator called without an active Guard";
+  assert(gCoreAllocatorGuard != nullptr);
   return coreMalloc(
       size, gCoreAllocatorGuard->numStripes_, gCoreAllocatorGuard->stripe_);
 }

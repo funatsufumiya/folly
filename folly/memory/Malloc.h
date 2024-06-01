@@ -136,7 +136,7 @@ class FastStaticBool {
  */
 #if defined(FOLLY_ASSUME_NO_JEMALLOC) || defined(FOLLY_SANITIZE)
 #define FOLLY_CONSTANT_USING_JE_MALLOC 1
-inline bool usingJEMalloc() noexcept {
+inline constexpr bool usingJEMalloc() noexcept {
   return false;
 }
 #elif defined(USE_JEMALLOC) && !defined(FOLLY_SANITIZE)
@@ -224,7 +224,7 @@ inline bool getTCMallocNumericProperty(const char* name, size_t* out) noexcept {
  */
 #if defined(FOLLY_ASSUME_NO_TCMALLOC) || defined(FOLLY_SANITIZE)
 #define FOLLY_CONSTANT_USING_TC_MALLOC 1
-inline bool usingTCMalloc() noexcept {
+inline constexpr bool usingTCMalloc() noexcept {
   return false;
 }
 #elif defined(USE_TCMALLOC) && !defined(FOLLY_SANITIZE)
@@ -266,9 +266,11 @@ FOLLY_EXPORT inline bool usingTCMalloc() noexcept {
 #endif
 
 namespace detail {
-FOLLY_EXPORT inline bool usingJEMallocOrTCMalloc() noexcept {
+FOLLY_EXPORT inline constexpr bool usingJEMallocOrTCMalloc() noexcept {
   struct Initializer {
-    bool operator()() const { return usingJEMalloc() || usingTCMalloc(); }
+    constexpr bool operator()() const {
+      return usingJEMalloc() || usingTCMalloc();
+    }
   };
 #if FOLLY_CONSTANT_USING_JE_MALLOC && FOLLY_CONSTANT_USING_TC_MALLOC
   return Initializer{}();
@@ -292,7 +294,7 @@ inline bool canSdallocx() noexcept {
  *
  * @return bool
  */
-inline bool canNallocx() noexcept {
+inline constexpr bool canNallocx() noexcept {
   return detail::usingJEMallocOrTCMalloc();
 }
 
@@ -388,15 +390,15 @@ inline size_t goodMallocSize(size_t minSize) noexcept {
     return 0;
   }
 
-  if (!canNallocx()) {
+  if constexpr (!canNallocx()) {
     // No nallocx - no smarts
     return minSize;
+  } else {
+    // nallocx returns 0 if minSize can't succeed, but 0 is not actually
+    // a goodMallocSize if you want minSize
+    auto rv = nallocx(minSize, 0);
+    return rv ? rv : minSize;
   }
-
-  // nallocx returns 0 if minSize can't succeed, but 0 is not actually
-  // a goodMallocSize if you want minSize
-  auto rv = nallocx(minSize, 0);
-  return rv ? rv : minSize;
 }
 
 // We always request "good" sizes for allocation, so jemalloc can

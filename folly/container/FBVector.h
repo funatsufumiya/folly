@@ -998,11 +998,12 @@ class fbvector {
     void* p = impl_.b_;
     // xallocx() will shrink to precisely newCapacityBytes (which was generated
     // by goodMallocSize()) if it successfully shrinks in place.
-    if ((usingJEMalloc() && usingStdAllocator) &&
-        newCapacityBytes >= folly::jemallocMinInPlaceExpandable &&
-        xallocx(p, newCapacityBytes, 0, 0) == newCapacityBytes) {
-      impl_.z_ += newCap - oldCap;
-    } else {
+    // if ((usingJEMalloc() && usingStdAllocator) &&
+    //    newCapacityBytes >= folly::jemallocMinInPlaceExpandable &&
+    //    xallocx(p, newCapacityBytes, 0, 0) == newCapacityBytes) {
+    //  impl_.z_ += newCap - oldCap;
+    //} else
+    {
       T* newB = static_cast<T*>(catch_exception(
           [&] { return M_allocate(newCap); }, //
           &detail::thunk_return_nullptr));

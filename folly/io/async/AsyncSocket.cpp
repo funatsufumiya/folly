@@ -982,14 +982,38 @@ void AsyncSocket::connect(
     // bind the socket
     if (bindAddr != anyAddress()) {
       int one = 1;
-      if (netops_->setsockopt(
-              fd_, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one))) {
-        auto errnoCopy = errno;
-        doClose();
-        throw AsyncSocketException(
-            AsyncSocketException::NOT_OPEN,
-            "failed to setsockopt prior to bind on " + bindAddr.describe(),
-            errnoCopy);
+#if defined(IP_BIND_ADDRESS_NO_PORT) && !FOLLY_MOBILE
+      // If the any port is specified with a non-any address this is typically
+      // a client socket. However, calling bind before connect without
+      // IP_BIND_ADDRESS_NO_PORT forces the OS to find a unique port relying
+      // on only the local tuple. This limits the range of available ephemeral
+      // ports.  Using the IP_BIND_ADDRESS_NO_PORT delays assigning a port until
+      // connect expanding the available port range.
+      if (bindAddr.getPort() == 0) {
+        if (netops_->setsockopt(
+                fd_, IPPROTO_IP, IP_BIND_ADDRESS_NO_PORT, &one, sizeof(one))) {
+          auto errnoCopy = errno;
+          doClose();
+          throw AsyncSocketException(
+              AsyncSocketException::NOT_OPEN,
+              "failed to setsockopt IP_BIND_ADDRESS_NO_PORT prior to bind on " +
+                  bindAddr.describe(),
+              errnoCopy);
+        }
+      } else {
+#else
+      {
+#endif
+        if (netops_->setsockopt(
+                fd_, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one))) {
+          auto errnoCopy = errno;
+          doClose();
+          throw AsyncSocketException(
+              AsyncSocketException::NOT_OPEN,
+              "failed to setsockopt SO_REUSEADDR prior to bind on " +
+                  bindAddr.describe(),
+              errnoCopy);
+        }
       }
 
       bindAddr.getAddress(&addrStorage);
@@ -1384,6 +1408,10 @@ void AsyncSocket::setZeroCopyReenableThreshold(size_t threshold) {
   zeroCopyReenableThreshold_ = threshold;
 }
 
+void AsyncSocket::setZeroCopyDrainConfig(const ZeroCopyDrainConfig& config) {
+  zeroCopyDrainConfig_ = config;
+}
+
 bool AsyncSocket::isZeroCopyRequest(WriteFlags flags) {
   return (zeroCopyEnabled_ && isSet(flags, WriteFlags::WRITE_MSG_ZEROCOPY));
 }
@@ -1435,6 +1463,50 @@ void AsyncSocket::releaseZeroCopyBuf(uint32_t id) {
   }
 
   idZeroCopyBufPtrMap_.erase(iter);
+}
+
+void AsyncSocket::drainZeroCopyQueue() {
+  // try to drain ZC writes if any - this is best effort
+  size_t prevSize = 0;
+  while (idZeroCopyBufPtrMap_.size() != prevSize) {
+    prevSize = idZeroCopyBufPtrMap_.size();
+    handleErrMessages();
+  }
+
+  if (idZeroCopyBufPtrMap_.empty()) {
+    return;
+  }
+
+  // Enable SO_LINGER if requested.
+  if (zeroCopyDrainConfig_.linger.has_value()) {
+    struct linger optLinger = {1, zeroCopyDrainConfig_.linger.value()};
+    if (setSockOpt(SOL_SOCKET, SO_LINGER, &optLinger) != 0) {
+      VLOG(2) << "AsyncSocket::drainZeroCopyQueue(): error setting SO_LINGER "
+              << "on " << fd_ << ": errno=" << errno;
+    }
+  }
+
+  if (eventBase_) {
+    idZeroCopyBufPtrMap_.clear();
+    // copy the buffers and adjust the allocatedBytesBuffered_
+    std::vector<std::unique_ptr<folly::IOBuf>> bufs;
+    for (auto& info : std::exchange(idZeroCopyBufInfoMap_, {})) {
+      if (info.second.buf_) {
+        const size_t allocated = info.second.buf_->computeChainCapacity();
+        DCHECK_GE(allocatedBytesBuffered_, allocated);
+        allocatedBytesBuffered_ -= allocated;
+        bufs.emplace_back(std::move(info.second.buf_));
+      }
+    }
+    // enqueue for later destruction
+    eventBase_->scheduleAt(
+        [b = std::move(bufs)] {},
+        std::chrono::steady_clock::now() + zeroCopyDrainConfig_.drainDelay);
+  } else {
+    while (!idZeroCopyBufPtrMap_.empty()) {
+      releaseZeroCopyBuf(idZeroCopyBufPtrMap_.begin()->first);
+    }
+  }
 }
 
 void AsyncSocket::setZeroCopyBuf(
@@ -4362,17 +4434,15 @@ void AsyncSocket::doClose() {
   if (fd_ == NetworkSocket()) {
     return;
   }
+
+  drainZeroCopyQueue();
+
   if (const auto shutdownSocketSet = wShutdownSocketSet_.lock()) {
     shutdownSocketSet->close(fd_);
   } else {
     netops_->close(fd_);
   }
   fd_ = NetworkSocket();
-
-  // we also want to clear the zerocopy maps
-  // if the fd has been closed
-  idZeroCopyBufPtrMap_.clear();
-  idZeroCopyBufInfoMap_.clear();
 }
 
 std::ostream& operator<<(

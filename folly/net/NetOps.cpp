@@ -26,34 +26,24 @@
 #include <cstddef>
 #include <stdexcept>
 
+#include <folly/CPortability.h>
 #include <folly/ScopeGuard.h>
+#include <folly/Utility.h>
 #include <folly/net/detail/SocketFileDescriptorMap.h>
 
 #ifdef _WIN32
 #include <MSWSock.h> // @manual
 #endif
 
-#if !FOLLY_HAVE_RECVMMSG
-#if FOLLY_HAVE_WEAK_SYMBOLS
-extern "C" FOLLY_ATTR_WEAK int recvmmsg(
-    int sockfd,
-    struct mmsghdr* msgvec,
-    unsigned int vlen,
-#if defined(__EMSCRIPTEN__)
-    unsigned int flags,
+#if (defined(__linux__) && !defined(__ANDROID__)) ||                       \
+    (defined(__ANDROID__) && __ANDROID_API__ >= 21 /* released 2014 */) || \
+    defined(__FreeBSD__) || defined(__SGX__) || defined(__EMSCRIPTEN__)
+static_assert(folly::to_bool(::recvmmsg));
+static_assert(folly::to_bool(::sendmmsg));
 #else
-    int flags,
+static int (*recvmmsg)(...) = nullptr;
+static int (*sendmmsg)(...) = nullptr;
 #endif
-    struct timespec* timeout);
-#else
-static int (*recvmmsg)(
-    int sockfd,
-    struct mmsghdr* msgvec,
-    unsigned int vlen,
-    int flags,
-    struct timespec* timeout) = nullptr;
-#endif // FOLLY_HAVE_WEAK_SYMBOLS
-#endif // FOLLY_HAVE_RECVMMSG
 
 namespace folly {
 namespace netops {
@@ -408,10 +398,12 @@ int recvmmsg(
 #if defined(__EMSCRIPTEN__)
   throw std::logic_error("Not implemented!");
 #else
-  if (reinterpret_cast<void*>(::recvmmsg) != nullptr) {
+  if (to_bool(::recvmmsg)) {
     return wrapSocketFunction<int>(::recvmmsg, s, msgvec, vlen, flags, timeout);
   }
   // implement via recvmsg
+  FOLLY_PUSH_WARNING
+  FOLLY_CLANG_DISABLE_WARNING("-Wunreachable-code")
   for (unsigned int i = 0; i < vlen; i++) {
     ssize_t ret = recvmsg(s, &msgvec[i].msg_hdr, flags);
     // in case of an error
@@ -427,6 +419,7 @@ int recvmmsg(
     }
   }
   return static_cast<int>(vlen);
+  FOLLY_POP_WARNING
 #endif
 }
 
@@ -551,12 +544,15 @@ ssize_t sendmsg(NetworkSocket socket, const msghdr* message, int flags) {
 
 int sendmmsg(
     NetworkSocket socket, mmsghdr* msgvec, unsigned int vlen, int flags) {
-#if FOLLY_HAVE_SENDMMSG
-  return wrapSocketFunction<int>(::sendmmsg, socket, msgvec, vlen, flags);
-#elif defined(__EMSCRIPTEN__)
+#if defined(__EMSCRIPTEN__)
   throw std::logic_error("Not implemented!");
 #else
+  if (to_bool(::sendmmsg)) {
+    return wrapSocketFunction<int>(::sendmmsg, socket, msgvec, vlen, flags);
+  }
   // implement via sendmsg
+  FOLLY_PUSH_WARNING
+  FOLLY_CLANG_DISABLE_WARNING("-Wunreachable-code")
   for (unsigned int i = 0; i < vlen; i++) {
     ssize_t ret = sendmsg(socket, &msgvec[i].msg_hdr, flags);
     // in case of an error
@@ -574,6 +570,7 @@ int sendmmsg(
   }
 
   return static_cast<int>(vlen);
+  FOLLY_POP_WARNING
 #endif
 }
 
@@ -796,6 +793,8 @@ int set_socket_close_on_exec(NetworkSocket s) {
 }
 
 void Msgheader::setName(sockaddr_storage* addrStorage, size_t len) {
+  FOLLY_PUSH_WARNING
+  FOLLY_CLANG_DISABLE_WARNING("-Wundef")
 #ifdef _WIN32
   msg_.name = reinterpret_cast<LPSOCKADDR>(addrStorage);
   msg_.namelen = len;
@@ -805,6 +804,7 @@ void Msgheader::setName(sockaddr_storage* addrStorage, size_t len) {
   msg_.msg_name = reinterpret_cast<void*>(addrStorage);
   msg_.msg_namelen = len;
 #endif
+  FOLLY_POP_WARNING
 }
 
 void Msgheader::setIovecs(const struct iovec* vec, size_t iovec_len) {
@@ -847,6 +847,8 @@ void Msgheader::setFlags(int flags) {
 }
 
 void Msgheader::incrCmsgLen(size_t val) {
+  FOLLY_PUSH_WARNING
+  FOLLY_CLANG_DISABLE_WARNING("-Wundef")
 #ifdef _WIN32
   msg_.Control.len += WSA_CMSG_SPACE(val);
 #elif __EMSCRIPTEN__
@@ -854,6 +856,7 @@ void Msgheader::incrCmsgLen(size_t val) {
 #else
   msg_.msg_controllen += CMSG_SPACE(val);
 #endif
+  FOLLY_POP_WARNING
 }
 
 XPLAT_CMSGHDR* Msgheader::getFirstOrNextCmsgHeader(XPLAT_CMSGHDR* cm) {
@@ -865,6 +868,8 @@ XPLAT_MSGHDR* Msgheader::getMsg() {
 }
 
 XPLAT_CMSGHDR* Msgheader::cmsgNextHrd(XPLAT_CMSGHDR* cm) {
+  FOLLY_PUSH_WARNING
+  FOLLY_CLANG_DISABLE_WARNING("-Wundef")
 #ifdef _WIN32
   return WSA_CMSG_NXTHDR(&msg_, cm);
 #elif __EMSCRIPTEN__
@@ -872,9 +877,12 @@ XPLAT_CMSGHDR* Msgheader::cmsgNextHrd(XPLAT_CMSGHDR* cm) {
 #else
   return CMSG_NXTHDR(&msg_, cm);
 #endif
+  FOLLY_POP_WARNING
 }
 
 XPLAT_CMSGHDR* Msgheader::cmsgFirstHrd() {
+  FOLLY_PUSH_WARNING
+  FOLLY_CLANG_DISABLE_WARNING("-Wundef")
 #ifdef _WIN32
   return WSA_CMSG_FIRSTHDR(&msg_);
 #elif __EMSCRIPTEN__
@@ -882,6 +890,7 @@ XPLAT_CMSGHDR* Msgheader::cmsgFirstHrd() {
 #else
   return CMSG_FIRSTHDR(&msg_);
 #endif
+  FOLLY_POP_WARNING
 }
 } // namespace netops
 } // namespace folly

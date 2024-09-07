@@ -145,7 +145,9 @@ cpp_library(
         "HazptrThrLocal.h",
     ],
     deps = [
-        "//folly/executors:queued_immediate_executor",
+        "//folly:indestructible",
+        "//folly:scope_guard",
+        "//folly/executors:inline_executor",
         "//folly/portability:gflags",
     ],
     exported_deps = [
@@ -158,6 +160,7 @@ cpp_library(
         "//folly:traits",
         "//folly/concurrency:cache_locality",
         "//folly/container:f14_hash",
+        "//folly/portability:config",
         "//folly/synchronization/detail:hazptr_utils",
     ],
     exported_external_deps = [

@@ -65,7 +65,7 @@ struct ExpectedHelper;
  * Expected objects in the error state.
  */
 template <class Error>
-class Unexpected final {
+class FOLLY_NODISCARD Unexpected final {
   template <class E>
   friend class Unexpected;
   template <class V, class E>
@@ -139,8 +139,8 @@ inline bool operator!=(
  * }
  */
 template <class Error>
-FOLLY_NODISCARD constexpr Unexpected<typename std::decay<Error>::type>
-makeUnexpected(Error&& err) {
+constexpr Unexpected<typename std::decay<Error>::type> makeUnexpected(
+    Error&& err) {
   return Unexpected<typename std::decay<Error>::type>{
       static_cast<Error&&>(err)};
 }
@@ -213,7 +213,7 @@ using ExpectedErrorType =
 // Details...
 namespace expected_detail {
 
-template <typename Value, typename Error, typename = void>
+template <typename Value, typename Error>
 struct Promise;
 template <typename Value, typename Error>
 struct PromiseReturn;
@@ -810,6 +810,19 @@ struct ExpectedHelper {
     return makeUnexpected(static_cast<decltype(ex)&&>(ex).error());
   }
 
+  template <
+      class This,
+      class OnError,
+      class Err =
+          decltype(std::declval<OnError>()(std::declval<This>().error()))
+              FOLLY_REQUIRES_TRAILING(std::is_void<Err>::value)>
+  static This onError_(This&& ex, OnError&& onError) {
+    if (UNLIKELY(ex.which_ == expected_detail::Which::eError)) {
+      static_cast<OnError&&>(onError)(static_cast<This&&>(ex).error());
+    }
+    return ex;
+  }
+
   FOLLY_POP_WARNING
 };
 } // namespace expected_detail_ExpectedHelper
@@ -975,27 +988,6 @@ class Expected final : expected_detail::ExpectedStorage<Value, Error> {
           std::is_constructible<Error, E&&>::value)>
   Expected(Expected<V, E> that) : Base{expected_detail::EmptyTag{}} {
     this->assign(std::move(that));
-  }
-
-  // Implicit then-chaining conversion: if `Expected<Value, Error>` can be
-  // constructed from `V`, then we can directly convert `Expected<V, E>` to
-  // `Expected<Value, Error>`.
-  //
-  // Specifically, this allows a user-defined conversions of `V` to
-  // `Expected<Value, Error>` to work as desired with range-based iteration
-  // over containers of `Expected<V, E>`.
-  template <
-      class V,
-      class E FOLLY_REQUIRES_TRAILING(
-          !std::is_same<Expected<V, E>, Expected>::value &&
-          !std::is_constructible<Value, V&&>::value &&
-          std::is_constructible<Expected<Value, Error>, V&&>::value &&
-          std::is_constructible<Error, E&&>::value)>
-  /* implicit */ Expected(Expected<V, E> that)
-      : Base{expected_detail::EmptyTag{}} {
-    this->assign(std::move(that).then([](V&& v) -> Expected<Value, Error> {
-      return Expected<Value, Error>{v};
-    }));
   }
 
   FOLLY_REQUIRES(std::is_copy_constructible<Value>::value)
@@ -1375,6 +1367,37 @@ class Expected final : expected_detail::ExpectedStorage<Value, Error> {
         std::move(base()), static_cast<Yes&&>(yes), static_cast<No&&>(no)));
   }
 
+  /**
+   * onError
+   */
+  template <class OnError>
+  auto onError(OnError&& onError) const& {
+    if (this->uninitializedByException()) {
+      throw_exception<BadExpectedAccess<void>>();
+    }
+
+    return expected_detail::ExpectedHelper::onError_(
+        *this, static_cast<OnError&&>(onError));
+  }
+
+  template <class OnError>
+  auto onError(OnError&& onError) & {
+    if (this->uninitializedByException()) {
+      throw_exception<BadExpectedAccess<void>>();
+    }
+    return expected_detail::ExpectedHelper::onError_(
+        *this, static_cast<OnError&&>(onError));
+  }
+
+  template <class OnError>
+  auto onError(OnError&& onError) && {
+    if (this->uninitializedByException()) {
+      throw_exception<BadExpectedAccess<void>>();
+    }
+    return expected_detail::ExpectedHelper::onError_(
+        std::move(*this), static_cast<OnError&&>(onError));
+  }
+
   // Quasi-private, exposed only for implementing efficient short-circuiting
   // coroutines on top of `Expected`.  Do NOT use this instead of
   // `optional<Expected<>>`, for these reasons:
@@ -1622,8 +1645,7 @@ inline constexpr bool ReturnsVoid =
     std::is_trivial_v<Value> && std::is_empty_v<Value>;
 
 template <typename Value, typename Error>
-struct Promise<Value, Error, typename std::enable_if<!ReturnsVoid<Value>>::type>
-    : public PromiseBase<Value, Error> {
+struct PromiseReturnsValue : public PromiseBase<Value, Error> {
   template <typename U = Value>
   void return_value(U&& u) {
     auto& v = *this->value_;
@@ -1633,11 +1655,17 @@ struct Promise<Value, Error, typename std::enable_if<!ReturnsVoid<Value>>::type>
 };
 
 template <typename Value, typename Error>
-struct Promise<Value, Error, typename std::enable_if<ReturnsVoid<Value>>::type>
-    : public PromiseBase<Value, Error> {
+struct PromiseReturnsVoid : public PromiseBase<Value, Error> {
   // When the coroutine uses `return;` you can fail via `co_await err`.
   void return_void() { this->value_->emplace(Value{}); }
 };
+
+template <typename Value, typename Error>
+struct Promise //
+    : conditional_t<
+          ReturnsVoid<Value>,
+          PromiseReturnsVoid<Value, Error>,
+          PromiseReturnsValue<Value, Error>> {};
 
 template <typename Error>
 struct UnexpectedAwaitable {

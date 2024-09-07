@@ -859,7 +859,7 @@ inline void swap(
 
 template <typename T>
 inline constexpr bool is_sorted_vector_set_v =
-    detail::is_instantiation_of_v<sorted_vector_set, T>;
+    is_instantiation_of_v<sorted_vector_set, T>;
 
 template <typename T>
 struct is_sorted_vector_set : std::bool_constant<is_sorted_vector_set_v<T>> {};
@@ -1200,12 +1200,12 @@ class sorted_vector_map : detail::growth_policy_wrapper<GrowthPolicy> {
 
   template <typename... Args>
   std::pair<iterator, bool> try_emplace(key_type&& k, Args&&... args) {
-    return try_emplace_impl(k, std::move(k), std::forward<Args>(args)...);
+    return try_emplace_impl(std::move(k), std::forward<Args>(args)...);
   }
 
   template <typename... Args>
   std::pair<iterator, bool> try_emplace(const key_type& k, Args&&... args) {
-    return try_emplace_impl(k, k, std::forward<Args>(args)...);
+    return try_emplace_impl(k, std::forward<Args>(args)...);
   }
 
   template <typename M>
@@ -1565,13 +1565,17 @@ class sorted_vector_map : detail::growth_policy_wrapper<GrowthPolicy> {
     return its;
   }
 
-  template <typename... Args>
-  std::pair<iterator, bool> try_emplace_impl(
-      const key_type& key, Args&&... args) {
+  template <typename K, typename... Args>
+  std::pair<iterator, bool> try_emplace_impl(K&& key, Args&&... args) {
     iterator it = lower_bound(key);
     if (it == end() || key_comp()(key, it->first)) {
       return std::make_pair(
-          emplace_hint(it, std::forward<Args>(args)...), true);
+          emplace_hint(
+              it,
+              std::piecewise_construct,
+              std::forward_as_tuple(std::forward<K>(key)),
+              std::forward_as_tuple(std::forward<Args>(args)...)),
+          true);
     }
     return std::make_pair(it, false);
   }
@@ -1614,7 +1618,7 @@ inline void swap(
 
 template <typename T>
 inline constexpr bool is_sorted_vector_map_v =
-    detail::is_instantiation_of_v<sorted_vector_map, T>;
+    is_instantiation_of_v<sorted_vector_map, T>;
 
 template <typename T>
 struct is_sorted_vector_map : std::bool_constant<is_sorted_vector_map_v<T>> {};

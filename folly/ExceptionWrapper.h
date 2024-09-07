@@ -38,8 +38,6 @@
 #include <folly/lang/Assume.h>
 #include <folly/lang/Exception.h>
 
-#define FOLLY_EXCEPTION_WRAPPER_H_INCLUDED
-
 namespace folly {
 
 #define FOLLY_REQUIRES_DEF(...) \
@@ -107,12 +105,7 @@ class exception_wrapper final {
   template <class Ex>
   using IsStdException = std::is_base_of<std::exception, std::decay_t<Ex>>;
 
-  struct PrivateCtor {};
-
   std::exception_ptr ptr_;
-
-  template <class Ex, typename... As>
-  exception_wrapper(PrivateCtor, std::in_place_type_t<Ex>, As&&... as);
 
   template <class T>
   struct IsRegularExceptionType
@@ -374,7 +367,7 @@ fbstring exceptionStr(exception_wrapper const& ew);
 template <typename F>
 exception_wrapper try_and_catch(F&& fn) noexcept {
   auto x = [&] { return void(static_cast<F&&>(fn)()), std::exception_ptr{}; };
-  return exception_wrapper{catch_exception(x, std::current_exception)};
+  return exception_wrapper{catch_exception(x, current_exception)};
 }
 } // namespace folly
 

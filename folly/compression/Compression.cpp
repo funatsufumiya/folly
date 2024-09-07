@@ -63,11 +63,11 @@
 #include <folly/lang/Bits.h>
 #include <folly/stop_watch.h>
 
-using folly::io::compression::detail::dataStartsWithLE;
-using folly::io::compression::detail::prefixToStringLE;
+using folly::compression::detail::dataStartsWithLE;
+using folly::compression::detail::prefixToStringLE;
 
 namespace folly {
-namespace io {
+namespace compression {
 
 Codec::Codec(CodecType type, Optional<int> /* level */, StringPiece /* name */)
     : type_(type) {}
@@ -1203,6 +1203,8 @@ void LZMA2StreamCodec::resetDStream() {
   }
 }
 
+FOLLY_PUSH_WARNING
+FOLLY_GNU_DISABLE_WARNING("-Wswitch-enum")
 lzma_ret lzmaThrowOnError(lzma_ret const rc) {
   switch (rc) {
     case LZMA_OK:
@@ -1223,6 +1225,7 @@ lzma_ret lzmaThrowOnError(lzma_ret const rc) {
           to<std::string>("LZMA2StreamCodec: error: ", rc));
   }
 }
+FOLLY_POP_WARNING
 
 lzma_action lzmaTranslateFlush(StreamCodec::FlushOp flush) {
   switch (flush) {
@@ -2015,5 +2018,5 @@ std::unique_ptr<Codec> getAutoUncompressionCodec(
   return AutomaticCodec::create(
       std::move(customCodecs), std::move(terminalCodec));
 }
-} // namespace io
+} // namespace compression
 } // namespace folly

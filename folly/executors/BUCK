@@ -242,6 +242,7 @@ cpp_library(
         ":global_executor",
         ":serialized_executor",
         "//folly:exception_string",
+        "//folly:scope_guard",
         "//folly/concurrency:unbounded_queue",
         "//folly/io/async:request_context",
         "//folly/synchronization:distributed_mutex",
@@ -363,11 +364,13 @@ cpp_library(
     headers = ["QueuedImmediateExecutor.h"],
     deps = [
         "//folly:indestructible",
+        "//folly:scope_guard",
     ],
     exported_deps = [
         ":inline_executor",
         "//folly:executor",
         "//folly:thread_local",
+        "//folly/io/async:request_context",
     ],
 )
 
@@ -395,6 +398,7 @@ cpp_library(
     exported_deps = [
         ":queue_observer",
         "//folly:default_keep_alive_executor",
+        "//folly/concurrency:unbounded_queue",
         "//folly/io/async:async_base",
     ],
 )
@@ -453,5 +457,32 @@ cpp_library(
     ],
     external_deps = [
         "glog",
+    ],
+)
+
+cpp_library(
+    name = "threaded_repeating_function_runner",
+    srcs = ["ThreadedRepeatingFunctionRunner.cpp"],
+    headers = ["ThreadedRepeatingFunctionRunner.h"],
+    deps = [
+        "//folly/system:thread_name",
+    ],
+    exported_deps = [
+        "//folly:function",
+    ],
+    external_deps = [
+        "glog",
+    ],
+)
+
+cpp_library(
+    name = "execution_observer",
+    srcs = ["ExecutionObserver.cpp"],
+    headers = ["ExecutionObserver.h"],
+    deps = [
+        "//folly/tracing:static_tracepoint",
+    ],
+    exported_external_deps = [
+        "boost",
     ],
 )

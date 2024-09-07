@@ -200,9 +200,11 @@ cpp_benchmark(
     deps = [
         "//folly:benchmark",
         "//folly:chrono",
+        "//folly:clock_gettime_wrappers",
         "//folly/chrono:hardware",
         "//folly/hash:hash",
         "//folly/init:init",
+        "//folly/lang:keep",
     ],
 )
 
@@ -454,8 +456,8 @@ cpp_unittest(
     headers = [],
     deps = [
         "//folly:exception",
-        "//folly/experimental:test_util",
         "//folly/portability:gtest",
+        "//folly/testing:test_util",
     ],
 )
 
@@ -619,10 +621,10 @@ cpp_unittest(
         "//folly:file",
         "//folly:string",
         "//folly:subprocess",
-        "//folly/experimental:test_util",
         "//folly/experimental/io:fs_util",
         "//folly/portability:gflags",
         "//folly/portability:gtest",
+        "//folly/testing:test_util",
     ],
     external_deps = [
         ("boost", None, "boost_thread"),
@@ -656,8 +658,8 @@ cpp_unittest(
         "//folly:string",
         "//folly/detail:file_util_detail",
         "//folly/detail:file_util_vector_detail",
-        "//folly/experimental:test_util",
         "//folly/portability:gtest",
+        "//folly/testing:test_util",
     ],
     external_deps = [
         "glog",
@@ -1358,6 +1360,7 @@ cpp_unittest(
         "//folly/portability:gmock",
         "//folly/portability:gtest",
         "//folly/portability:sys_mman",
+        "//folly/portability:unistd",
     ],
     external_deps = [
         ("boost", None, "boost_algorithm"),
@@ -1485,10 +1488,11 @@ cpp_unittest(
         "//folly:singleton_thread_local",
         "//folly:string",
         "//folly:synchronized",
-        "//folly/experimental:test_util",
         "//folly/experimental/io:fs_util",
         "//folly/lang:keep",
         "//folly/portability:gtest",
+        "//folly/synchronization:latch",
+        "//folly/testing:test_util",
     ],
     external_deps = [
         ("boost", None, "boost_thread"),
@@ -1504,9 +1508,9 @@ cpp_unittest(
         "//folly:network_address",
         "//folly:string",
         "//folly/container:array",
-        "//folly/experimental:test_util",
         "//folly/portability:gtest",
         "//folly/portability:sockets",
+        "//folly/testing:test_util",
     ],
 )
 
@@ -1548,6 +1552,20 @@ cpp_benchmark(
         "//folly:string",
     ],
     external_deps = [("boost", None, "boost_algorithm")],
+)
+
+cpp_binary(
+    name = "string_to_float_benchmark",
+    srcs = ["StringToFloatBenchmark.cpp"],
+    headers = [],
+    deps = [
+        "fbsource//third-party/fast_float:fast_float",
+        "//folly:benchmark",
+        "//folly:stop_watch",
+    ],
+    external_deps = [
+        "double_conversion",
+    ],
 )
 
 cpp_unittest(
@@ -1592,13 +1610,13 @@ cpp_unittest(
         "//folly:format",
         "//folly:string",
         "//folly:subprocess",
-        "//folly/experimental:test_util",
         "//folly/experimental/io:fs_util",
         "//folly/gen:base",
         "//folly/gen:file",
         "//folly/gen:string",
         "//folly/portability:gtest",
         "//folly/portability:unistd",
+        "//folly/testing:test_util",
     ],
     external_deps = [
         "glog",
@@ -1718,8 +1736,9 @@ cpp_binary(
     deps = [
         "//folly:benchmark",
         "//folly:thread_local",
-        "//folly/experimental/io:fs_util",
+        "//folly/lang:keep",
         "//folly/portability:gflags",
+        "//folly/synchronization:latch",
     ],
     external_deps = [
         "glog",
@@ -1767,13 +1786,13 @@ cpp_unittest(
     deps = [
         "//folly:memory",
         "//folly:thread_local",
-        "//folly/experimental:test_util",
         "//folly/experimental/io:fs_util",
         "//folly/lang:keep",
         "//folly/portability:gtest",
         "//folly/portability:unistd",
         "//folly/synchronization:baton",
         "//folly/system:thread_id",
+        "//folly/testing:test_util",
     ],
     external_deps = [
         "glog",

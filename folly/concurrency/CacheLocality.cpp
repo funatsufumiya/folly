@@ -20,13 +20,13 @@
 #define _GNU_SOURCE 1 // for RTLD_NOLOAD
 #include <dlfcn.h>
 #endif
+#include <format>
 #include <fstream>
 #include <mutex>
 #include <numeric>
 #include <optional>
 
-#include <fmt/core.h>
-//#include <glog/logging.h>
+// #include <glog/logging.h>
 #include <folly/Indestructible.h>
 #include <folly/Memory.h>
 #include <folly/ScopeGuard.h>
@@ -156,7 +156,7 @@ static size_t parseLeadingNumber(const std::string& line) {
   char* end;
   unsigned long val = strtoul(raw, &end, 10);
   if (end == raw || (*end != ',' && *end != '-' && *end != '\n' && *end != 0)) {
-    throw std::runtime_error(fmt::format("error parsing list '{}'", line));
+    throw std::runtime_error(std::format("error parsing list '{}'", line));
   }
   return val;
 }
@@ -170,7 +170,7 @@ CacheLocality CacheLocality::readFromSysfsTree(
   for (size_t cpu = 0;; ++cpu) {
     std::vector<size_t> levels;
     for (size_t index = 0;; ++index) {
-      auto dir = fmt::format(
+      auto dir = std::format(
           "/sys/devices/system/cpu/cpu{}/cache/index{}/", cpu, index);
       auto cacheType = mapping(dir + "type");
       auto equivStr = mapping(dir + "shared_cpu_list");

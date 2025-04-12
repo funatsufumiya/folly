@@ -55,6 +55,9 @@ uint32_t getMaxDeferredReadersSlow(relaxed_atomic<uint32_t>& cache) {
 }
 
 long getCurrentThreadInvoluntaryContextSwitchCount() {
+#ifdef _WIN32
+  return 0;
+#else
 #ifdef RUSAGE_THREAD
   struct rusage usage;
   if (getrusage(RUSAGE_THREAD, &usage)) {
@@ -64,7 +67,8 @@ long getCurrentThreadInvoluntaryContextSwitchCount() {
   }
 #else
   return 0;
-#endif
+#endif // RUSAGE_THREAD
+#endif // _WIN32
 }
 
 [[noreturn]] void throwOperationNotPermitted() {

@@ -16,7 +16,7 @@
 
 #include <folly/concurrency/CacheLocality.h>
 
-#ifndef _MSC_VER
+#ifndef _WIN32
 #define _GNU_SOURCE 1 // for RTLD_NOLOAD
 #include <dlfcn.h>
 #endif
@@ -35,6 +35,39 @@
 #include <folly/lang/Exception.h>
 #include <folly/portability/Unistd.h>
 #include <folly/system/ThreadId.h>
+
+#ifdef _WIN32
+
+#include <windows.h>
+
+namespace folly {
+namespace portability {
+namespace unistd {
+
+long sysconf(int name) {
+  switch (name) {
+    case _SC_NPROCESSORS_ONLN:
+      {
+        SYSTEM_INFO sysInfo;
+        GetSystemInfo(&sysInfo);
+        return sysInfo.dwNumberOfProcessors;
+      }
+    case _SC_PAGESIZE:
+      {
+        SYSTEM_INFO sysInfo;
+        GetSystemInfo(&sysInfo);
+        return sysInfo.dwPageSize;
+      }
+    default:
+      return -1;
+  }
+}
+
+} // namespace unistd
+} // namespace portability
+} // namespace folly
+#endif
+
 
 namespace folly {
 
@@ -321,7 +354,7 @@ CacheLocality CacheLocality::uniform(size_t numCpus) {
 ////////////// Getcpu
 
 Getcpu::Func Getcpu::resolveVdsoFunc() {
-#if !defined(FOLLY_HAVE_LINUX_VDSO) || defined(FOLLY_SANITIZE_MEMORY)
+#if defined(_WIN32) || !defined(FOLLY_HAVE_LINUX_VDSO) || defined(FOLLY_SANITIZE_MEMORY)
   return nullptr;
 #else
   void* h = dlopen("linux-vdso.so.1", RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
